@@ -37,15 +37,23 @@ const HomeScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>AR Feature</Text>
+          <Text style={styles.cardTitle}>AR Features</Text>
           <View style={styles.arPlaceholder}>
             <Text style={styles.arPlaceholderText}>AR View Placeholder</Text>
           </View>
+          
           <TouchableOpacity
             style={styles.arButton}
             onPress={() => navigation.navigate('ARDistance')}
           >
             <Text style={styles.arButtonText}>Round 2 Distance</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.arButton, { marginTop: 10, backgroundColor: '#8E24AA' }]}
+            onPress={() => navigation.navigate('ObjectDistance')}
+          >
+            <Text style={styles.arButtonText}>Round 3 Object Distance</Text>
           </TouchableOpacity>
         </View>
 

@@ -9,6 +9,7 @@ import SignupScreen from './src/screens/SignupScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ARDistanceScreen from './src/screens/ARDistanceScreen';
+import ObjectDistanceScreen from './src/screens/ObjectDistanceScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -28,6 +29,7 @@ const App = () => {
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="ARDistance" component={ARDistanceScreen} />
+          <Stack.Screen name="ObjectDistance" component={ObjectDistanceScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

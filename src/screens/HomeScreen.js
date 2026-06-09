@@ -45,7 +45,7 @@ const HomeScreen = ({ navigation }) => {
             style={styles.arButton}
             onPress={() => navigation.navigate('ARDistance')}
           >
-            <Text style={styles.arButtonText}>Start AR</Text>
+            <Text style={styles.arButtonText}>Round 2 Distance</Text>
           </TouchableOpacity>
         </View>
 

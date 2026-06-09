@@ -43,7 +43,7 @@ const HomeScreen = ({ navigation }) => {
           </View>
           <TouchableOpacity
             style={styles.arButton}
-            onPress={() => Alert.alert('AR', 'Starting AR feature...')}
+            onPress={() => navigation.navigate('ARDistance')}
           >
             <Text style={styles.arButtonText}>Start AR</Text>
           </TouchableOpacity>

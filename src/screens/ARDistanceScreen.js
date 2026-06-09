@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,60 +6,81 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Platform,
-  ActivityIndicator,
+  requireNativeComponent,
+  UIManager,
+  findNodeHandle,
 } from 'react-native';
-import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
-import { ArMeasureViewNative, ArCommands } from '../native/ArMeasureViewNative';
+import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+
+const ArMeasureViewNative = requireNativeComponent('ArMeasureView');
+
+const ArCommands = {
+  reset: (ref) => dispatch(ref, 'reset'),
+  undo:  (ref) => dispatch(ref, 'undo'),
+  clear: (ref) => dispatch(ref, 'clear'),
+};
+
+function dispatch(ref, name, args = []) {
+  const node = findNodeHandle(ref);
+  if (node == null) return;
+  UIManager.dispatchViewManagerCommand(node, name, args);
+}
 
 const ARDistanceScreen = ({ navigation }) => {
-  const [hasPermission, setHasPermission] = useState(false);
-  const [trackingState, setTrackingState] = useState('PAUSED');
-  const [distance, setDistance] = useState(null);
-  const [pointCount, setPointCount] = useState(0);
   const arRef = useRef(null);
+  const [hasPermission, setHasPermission] = useState(false);
+  const [trackingState, setTrackingState] = useState('NOT_INITIALIZED');
+  const [pointsCount, setPointsCount] = useState(0);
+  const [distanceText, setDistanceText] = useState(null);
 
-  useEffect(() => {
-    checkPermission();
-  }, []);
-
-  const checkPermission = async () => {
-    const status = await request(
-      Platform.OS === 'android' 
-        ? PERMISSIONS.ANDROID.CAMERA 
-        : PERMISSIONS.IOS.CAMERA
-    );
-    setHasPermission(status === RESULTS.GRANTED);
-  };
-
-  const onTrackingState = useCallback((e) => {
-    setTrackingState(e.nativeEvent.state);
-  }, []);
-
-  const onPointAdded = useCallback((e) => {
-    setPointCount(e.nativeEvent.index + 1);
-  }, []);
-
-  const onMeasured = useCallback((e) => {
-    setDistance(e.nativeEvent.distanceText);
-  }, []);
-
-  const onError = useCallback((e) => {
-    console.warn('AR Error:', e.nativeEvent.code);
-  }, []);
-
-  const resetPoints = () => {
-    if (arRef.current) {
-      ArCommands.reset(arRef.current);
-      setPointCount(0);
-      setDistance(null);
+  const requestPermission = async () => {
+    const permission = Platform.OS === 'android' ? PERMISSIONS.ANDROID.CAMERA : PERMISSIONS.IOS.CAMERA;
+    const status = await check(permission);
+    
+    if (status === RESULTS.GRANTED) {
+      setHasPermission(true);
+    } else {
+      const result = await request(permission);
+      setHasPermission(result === RESULTS.GRANTED);
     }
   };
 
-  const undoPoint = () => {
-    if (arRef.current) {
-      ArCommands.undo(arRef.current);
-      setPointCount(prev => Math.max(0, prev - 1));
-      if (pointCount <= 2) setDistance(null);
+  useEffect(() => {
+    requestPermission();
+  }, []);
+
+  const onStarted = () => {
+    console.log('AR Session Started');
+  };
+
+  const onTrackingState = (event) => {
+    setTrackingState(event.nativeEvent.state);
+  };
+
+  const onPointAdded = (event) => {
+    setPointsCount(event.nativeEvent.index + 1);
+  };
+
+  const onMeasured = (event) => {
+    setDistanceText(event.nativeEvent.distanceText);
+  };
+
+  const onError = (event) => {
+    const code = event.nativeEvent.code;
+    console.log('AR Error:', code);
+  };
+
+  const handleReset = () => {
+    ArCommands.clear(arRef.current);
+    setPointsCount(0);
+    setDistanceText(null);
+  };
+
+  const handleUndo = () => {
+    ArCommands.undo(arRef.current);
+    setPointsCount(prev => Math.max(0, prev - 1));
+    if (pointsCount <= 2) {
+      setDistanceText(null);
     }
   };
 
@@ -67,74 +88,71 @@ const ARDistanceScreen = ({ navigation }) => {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>Camera permission is required</Text>
-        <TouchableOpacity style={styles.button} onPress={checkPermission}>
-          <Text style={styles.buttonText}>Grant Permission</Text>
+        <TouchableOpacity 
+          style={styles.permissionButton} 
+          onPress={requestPermission}
+        >
+          <Text style={styles.buttonText}>Request Permission</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.button, { marginTop: 10, backgroundColor: '#757575' }]} 
+          style={[styles.permissionButton, { marginTop: 20, backgroundColor: '#757575' }]} 
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.buttonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (Platform.OS !== 'android') {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>AR Measurement is only supported on Android in this version.</Text>
-        <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
-          <Text style={styles.buttonText}>Go Back</Text>
+          <Text style={styles.buttonText}>Back to Home</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ArMeasureViewNative
         ref={arRef}
         style={StyleSheet.absoluteFill}
+        onStarted={onStarted}
         onTrackingState={onTrackingState}
         onPointAdded={onPointAdded}
         onMeasured={onMeasured}
         onError={onError}
       />
-      
-      <View style={styles.topOverlay} pointerEvents="box-none">
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={styles.instructionCard}>
-          <Text style={styles.instructionText}>
-            {trackingState !== 'TRACKING' 
-              ? 'Move device to initialize AR...' 
-              : pointCount === 0 
-                ? 'Tap to place Point A' 
-                : pointCount === 1 
-                  ? 'Tap to place Point B' 
-                  : 'Distance Measured'}
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.bottomOverlay} pointerEvents="box-none">
-        {distance && (
-          <View style={styles.resultCard}>
-            <Text style={styles.resultText}>Distance: {distance}</Text>
+      <SafeAreaView style={styles.uiContainer} pointerEvents="box-none">
+        <View style={styles.header} pointerEvents="box-none">
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={styles.backBtnText}>Back</Text>
+          </TouchableOpacity>
+          <View style={styles.instructionContainer}>
+            <Text style={styles.instructionText}>
+              {trackingState !== 'TRACKING' 
+                ? 'Move phone to find planes...' 
+                : pointsCount === 0 
+                  ? 'Tap to place Point A' 
+                  : pointsCount === 1 
+                    ? 'Tap to place Point B' 
+                    : 'Distance Measured'}
+            </Text>
           </View>
-        )}
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={undoPoint}>
-            <Text style={styles.secondaryButtonText}>Undo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.resetButton} onPress={resetPoints}>
-            <Text style={styles.resetButtonText}>Reset</Text>
-          </TouchableOpacity>
         </View>
-      </View>
-    </SafeAreaView>
+
+        <View style={styles.bottomContainer} pointerEvents="box-none">
+          {distanceText && (
+            <View style={styles.resultCard}>
+              <Text style={styles.resultLabel}>Measured Distance</Text>
+              <Text style={styles.resultValue}>{distanceText}</Text>
+            </View>
+          )}
+          
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={[styles.actionBtn, styles.undoBtn]} onPress={handleUndo}>
+              <Text style={styles.actionBtnText}>Undo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.resetBtn]} onPress={handleReset}>
+              <Text style={styles.actionBtnText}>Reset</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
 
@@ -150,13 +168,96 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     padding: 20,
   },
+  uiContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Platform.OS === 'android' ? 20 : 0,
+  },
+  backBtn: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  backBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  instructionContainer: {
+    backgroundColor: 'rgba(106, 27, 154, 0.8)',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    maxWidth: '70%',
+  },
+  instructionText: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  bottomContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  resultCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    width: '80%',
+    alignItems: 'center',
+    marginBottom: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  resultLabel: {
+    color: '#757575',
+    fontSize: 14,
+    marginBottom: 5,
+  },
+  resultValue: {
+    color: '#6A1B9A',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  actionBtn: {
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 25,
+    elevation: 3,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  undoBtn: {
+    backgroundColor: '#757575',
+  },
+  resetBtn: {
+    backgroundColor: '#6A1B9A',
+  },
+  actionBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
   errorText: {
     fontSize: 18,
     color: '#333',
-    marginBottom: 20,
     textAlign: 'center',
+    marginBottom: 20,
   },
-  button: {
+  permissionButton: {
     backgroundColor: '#6A1B9A',
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -164,86 +265,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  topOverlay: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  instructionCard: {
-    backgroundColor: 'rgba(106, 27, 154, 0.8)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  instructionText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  bottomOverlay: {
-    position: 'absolute',
-    bottom: 40,
-    left: 20,
-    right: 20,
-    alignItems: 'center',
-  },
-  resultCard: {
-    backgroundColor: 'white',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 15,
-    marginBottom: 20,
-    elevation: 5,
-  },
-  resultText: {
-    color: '#6A1B9A',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  resetButton: {
-    backgroundColor: 'white',
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#6A1B9A',
-  },
-  resetButtonText: {
-    color: '#6A1B9A',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  secondaryButtonText: {
-    color: 'white',
-    fontSize: 16,
     fontWeight: 'bold',
   },
 });

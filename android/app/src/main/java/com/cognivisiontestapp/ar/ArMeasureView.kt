@@ -14,6 +14,7 @@ import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.node.Node
 import io.github.sceneview.node.SphereNode
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
 import android.graphics.Color
 import kotlin.math.sqrt
 
@@ -53,6 +54,7 @@ class ArMeasureView(private val reactContext: ThemedReactContext) : FrameLayout(
                 if (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) Config.DepthMode.AUTOMATIC
                 else Config.DepthMode.DISABLED
             config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+            config.focusMode = Config.FocusMode.AUTO
         }
     }
 
@@ -86,13 +88,17 @@ class ArMeasureView(private val reactContext: ThemedReactContext) : FrameLayout(
     }
 
     private fun addPoint(anchor: Anchor) {
+        if (anchors.size >= 2) {
+            clearAll()
+        }
+
         anchors.add(anchor)
         
         val anchorNode = AnchorNode(arSceneView.engine, anchor)
         val sphereNode = SphereNode(
             engine = arSceneView.engine,
             radius = 0.02f,
-            materialInstance = arSceneView.materialLoader.createColorInstance(Color.PURPLE)
+            materialInstance = arSceneView.materialLoader.createColorInstance(Color.parseColor("#6A1B9A"))
         )
         anchorNode.addChildNode(sphereNode)
         arSceneView.addChildNode(anchorNode)
@@ -103,17 +109,18 @@ class ArMeasureView(private val reactContext: ThemedReactContext) : FrameLayout(
             putMap("world", anchor.pose.toMap())
         })
         
-        if (anchors.size >= 2) {
-            measureBetween(anchors[anchors.size - 2], anchors.last())
+        if (anchors.size == 2) {
+            measureBetween(anchors[0], anchors[1])
         }
     }
 
-    private fun measureBetween(a: Anchor, b: Anchor) {
+    private fun measureBetween(a: Anchor, b: Anchor): Float {
         val meters = distance(a.pose, b.pose)
         dispatchReactEvent("onMeasured", Arguments.createMap().apply {
             putDouble("distanceMeters", meters.toDouble())
             putString("distanceText", formatDistance(meters))
         })
+        return meters
     }
 
     fun undoLastPoint() {
@@ -129,6 +136,14 @@ class ArMeasureView(private val reactContext: ThemedReactContext) : FrameLayout(
     }
 
     fun resetMeasurement() = clearAll()
+
+    fun capture(requestId: Int) {
+        // Placeholder for capture
+        dispatchReactEvent("onResult", Arguments.createMap().apply {
+            putInt("requestId", requestId)
+            putString("result", "data:image/png;base64,")
+        })
+    }
 
     private fun distance(a: Pose, b: Pose): Float {
         val dx = b.tx() - a.tx(); val dy = b.ty() - a.ty(); val dz = b.tz() - a.tz()
